@@ -1,0 +1,29 @@
+# Entorno virtual
+venv/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Datos (no subir CSVs grandes a Git)
+data/raw/*.csv
+data/processed/*.csv
+
+# Credenciales AWS — NUNCA en Git
+.env
+*.env
+.aws/
+
+# Reportes generados
+reports/*.html
+reports/*.png
+
+# VS Code
+.vscode/settings.json
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
