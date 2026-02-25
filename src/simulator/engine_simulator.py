@@ -188,7 +188,7 @@ class MarineEngineSimulator:
         return pd.DataFrame(readings)
 
 
-# ── Punto de entrada cuando se ejecuta el script directamente ──────────────
+# -- Punto de entrada cuando se ejecuta el script directamente ---------------
 if __name__ == "__main__":
     from pathlib import Path
 
