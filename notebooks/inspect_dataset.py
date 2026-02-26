@@ -1,28 +1,60 @@
 """
-inspect_dataset.py
-------------------
-Inspección exploratoria del dataset de telemetría generado por engine_simulator.py.
+inspect_dataset.py — Inspección exploratoria del dataset de telemetría.
 
-Valida que:
-  - El CSV cargó correctamente (dimensiones, tipos, nulos).
-  - Las lecturas normales (fault_injected=False) caen dentro de los rangos operacionales.
-  - Las fallas inyectadas producen valores fuera de rango detectables.
+¿Qué hace este script?
+    Carga el CSV generado por engine_simulator.py y realiza cuatro verificaciones
+    en orden, mostrando los resultados en consola:
 
-Ejecutar desde la raíz del proyecto:
+    [1] Estructura básica:
+        Muestra cuántas lecturas tiene el dataset, qué período temporal cubre
+        y qué columnas contiene. Sirve para confirmar que el archivo se generó
+        correctamente y tiene el tamaño esperado.
+
+    [2] Tipos de datos:
+        Verifica que cada columna tiene el tipo correcto (float64 para sensores,
+        bool para fault_injected). Un tipo inesperado como 'object' indicaría
+        un problema al leer el CSV.
+
+    [3] Valores nulos:
+        El simulador no produce nulos por diseño. Si aparecen aquí, indica
+        corrupción en el archivo (líneas incompletas, errores de escritura).
+
+    [4] Estadísticas descriptivas:
+        Muestra media, mínimo, máximo y percentiles de cada sensor.
+        Útil para confirmar que los rangos de simulación son realistas.
+
+    [5] Verificación de rangos operacionales:
+        Compara los valores de las lecturas "normales" (sin falla inyectada)
+        contra los límites del motor MAN B&W. Todos deben marcar "OK".
+        Un "NOT OK" indica un bug en el simulador.
+
+    [6] Análisis de fallas:
+        Muestra cuántas fallas se inyectaron y sus estadísticas, para confirmar
+        que los valores de falla son visiblemente distintos de los normales.
+        Ej.: temperature_exhaust durante falla debe estar ≥ 410°C vs 320–380°C normal.
+
+Cómo ejecutarlo (desde marine-monitor/):
     python notebooks/inspect_dataset.py
+
+Requisito previo:
+    El CSV data/raw/engine_readings_24h.csv debe existir. Generarlo con:
+        python -m src.simulator.engine_simulator
 """
 
+import sys
 import pandas as pd
 import numpy as np
 from pathlib import Path
 
+# Agrega marine-monitor/ al path; necesario si se ejecuta desde otra carpeta
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 # ── Carga del dataset ──────────────────────────────────────────────────────
-# parse_dates convierte la columna 'timestamp' de string ISO 8601 a datetime64,
-# lo que permite indexar por tiempo y hacer aritmética de fechas directamente.
-df = pd.read_csv(
-    "data/raw/engine_readings_24h.csv",
-    parse_dates=["timestamp"],
-)
+# Ruta absoluta basada en la ubicación del script, no del directorio de trabajo.
+# parse_dates convierte 'timestamp' de string ISO 8601 a datetime64,
+# lo que habilita indexado temporal, resampling y slicing por fecha.
+DATA_PATH = Path(__file__).parent.parent / "data" / "raw" / "engine_readings_24h.csv"
+df = pd.read_csv(DATA_PATH, parse_dates=["timestamp"])
 
 # Usar timestamp como índice facilita resampling y slicing temporal posterior
 # (ej: df["2026-02-23 10:00":"2026-02-23 11:00"] para analizar una hora concreta)
