@@ -16,6 +16,14 @@ data/processed/*.csv
 .env
 *.env
 .aws/
+credentials
+aws-credentials
+*.pem
+*.key
+*.p12
+secrets.json
+config.local.*
+.env.*
 
 # Reportes generados
 reports/*.html
