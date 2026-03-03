@@ -58,7 +58,7 @@ else:
             "source": "marine-monitor-pipeline"
         }
     )
-    print(f"✅ Subido exitosamente: {s3_uri}")
+    print(f"Uploaded successfully: {s3_uri}")
 
     # Listar uploads recientes
     print("\nArchivos en S3:")

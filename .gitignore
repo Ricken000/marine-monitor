@@ -25,6 +25,10 @@ secrets.json
 config.local.*
 .env.*
 
+# Lambda build artifacts (dependencies + zip — too large for git)
+lambda/build/
+lambda/function.zip
+
 # Reportes generados
 reports/*.html
 reports/*.png
