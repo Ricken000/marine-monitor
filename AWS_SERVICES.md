@@ -42,12 +42,31 @@ marine-monitor-rc-2026/
 
 Runtime: Python 3.11 — Timeout: 60 s — Memory: 256 MB
 
+### SNS — Simple Notification Service
+
+| Resource | Name | Purpose |
+|---|---|---|
+| Topic | `marine-engine-alerts` | Receives CloudWatch alarm notifications and fans them out to all subscribers |
+| Subscription | `<notification-email>` | Email endpoint that receives an alert whenever a CloudWatch alarm fires |
+
+ARN: `arn:aws:sns:<region>:<account-id>:marine-engine-alerts`
+
+### CloudWatch — Alarms
+
+| Resource | Name | Condition | Action |
+|---|---|---|---|
+| Alarm | `MarineEngine-LowHealthScore` | `HealthScore` (avg, 5 min) < 60 | Publishes to `marine-engine-alerts` SNS topic |
+
+Namespace: `MarineEngine/Monitoring` — Dimension: `EngineId=ENGINE-01`
+
 ---
 
 ## Teardown Checklist
 
 Run these steps in order to delete all project resources:
 
+- [ ] Delete CloudWatch alarm `MarineEngine-LowHealthScore`
+- [ ] Delete SNS subscription (email) and topic `marine-engine-alerts`
 - [ ] Delete Lambda function `marine-engine-processor`
 - [ ] Detach policies from role `marine-monitor-lambda-role`, then delete the role
 - [ ] Delete all objects inside `marine-monitor-rc-2026`, then delete the bucket
@@ -64,4 +83,6 @@ Run these steps in order to delete all project resources:
 - [ ] Attach `AWSLambdaBasicExecutionRole` and `AmazonS3FullAccess` to the role
 - [ ] Package and deploy the Lambda function from `lambda/process_engine_data/`
 - [ ] Configure the S3 trigger to invoke the Lambda on `s3:ObjectCreated:*` events under the `engine-data/` prefix
+- [ ] Create SNS topic `marine-engine-alerts` and subscribe the notification email
+- [ ] Create CloudWatch alarm `MarineEngine-LowHealthScore` pointing to the SNS topic ARN
 - [ ] Update `.env` with the new bucket name and AWS profile

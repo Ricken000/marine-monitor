@@ -121,7 +121,7 @@ class S3DataUploader:
 
         Returns:
             The full S3 URI of the uploaded object, e.g.
-            "s3://marine-monitor-rc-2026/engine-data/year=2026/month=03/day=02/readings.csv".
+            "s3://<bucket>/engine-data/year=2026/month=03/day=02/readings.csv".
         """
         csv_buffer = df.to_csv(index=True).encode("utf-8")
         key        = self._build_s3_key(filename)

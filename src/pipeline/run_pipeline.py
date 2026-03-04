@@ -1,39 +1,37 @@
 """
-run_pipeline.py — Pipeline principal del sistema de monitoreo marino.
+run_pipeline.py — End-to-end pipeline for the Marine Engine Monitoring System.
 
-¿Qué hace este script?
-    Ejecuta la cadena completa de procesamiento de un extremo al otro:
+Executes the full processing chain from raw simulation to scored output:
 
-        [1] SIMULAR   → Genera datos sintéticos de sensores del motor
-                        (equivalente a una guardia real de máquinas).
-        [2] CARGAR    → Lee el CSV generado y lo prepara para análisis.
-        [3] DETECTAR  → Compara cada lectura con el comportamiento normal
-                        y marca las que son estadísticamente anómalas.
-        [4] PUNTUAR   → Calcula el health score (0–100) para cada lectura
-                        y clasifica el estado del motor en 5 niveles.
+    [1] SIMULATE  → Generates synthetic engine sensor readings that mimic
+                    a real engine watch period (one reading per minute).
+    [2] LOAD      → Reads the generated CSV and prepares it for analysis.
+    [3] DETECT    → Compares each reading to the normal baseline and flags
+                    statistically anomalous values (z-score threshold).
+    [4] SCORE     → Computes a health score (0–100) for every reading and
+                    classifies engine state into five severity levels.
 
-    Al terminar, guarda dos archivos CSV en el disco:
-        data/raw/engine_data_<timestamp>.csv        — lecturas crudas
-        data/processed/processed_engine_data_*.csv  — lecturas con scores
+Output files written to disk:
+    data/raw/engine_data_<timestamp>.csv       — raw sensor readings
+    data/processed/processed_engine_data_*.csv — enriched readings with scores
 
-¿Cuándo usar este script?
-    - Para generar un dataset completo en un solo comando.
-    - Para verificar que todos los módulos funcionan integrados.
-    - Como punto de entrada de un job automatizado (cron, CI, etc.).
+Usage (from the marine-monitor/ directory):
+    python -m src.pipeline.run_pipeline                          # 24 h, 3% faults
+    python -m src.pipeline.run_pipeline --hours 48               # 48 h of data
+    python -m src.pipeline.run_pipeline --hours 24 --fault-prob 0.05  # 5% faults
 
-Uso desde la carpeta marine-monitor/:
-    python -m src.pipeline.run_pipeline                         # 24h, 3% fallas
-    python -m src.pipeline.run_pipeline --hours 48              # 48h de datos
-    python -m src.pipeline.run_pipeline --hours 24 --fault-prob 0.05  # 5% fallas
+Optional CloudWatch integration (set in .env):
+    USE_CLOUDWATCH=true  — publishes a summary of metrics after each run
 
-Dependencias internas:
-    src.simulator.engine_simulator  → generación de datos
-    src.analysis.data_loader        → carga y preparación
-    src.analysis.anomaly_detector   → detección estadística de anomalías
-    src.analysis.health_score       → índice de salud del motor
+Internal dependencies:
+    src.simulator.engine_simulator  — data generation
+    src.analysis.data_loader        — data loading and preparation
+    src.analysis.anomaly_detector   — statistical anomaly detection
+    src.analysis.health_score       — engine health index
 """
 import argparse
 import logging
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -41,6 +39,7 @@ from src.simulator.engine_simulator import MarineEngineSimulator
 from src.analysis.data_loader import load_engine_data, get_summary
 from src.analysis.anomaly_detector import StatisticalAnomalyDetector
 from src.analysis.health_score import EngineHealthScorer
+from src.aws.cloudwatch_publisher import CloudWatchPublisher
 
 # ── Logging ────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -57,35 +56,40 @@ def run(
     output_dir: str   = "data/raw/"
 ) -> dict:
     """
-    Ejecuta los 4 pasos del pipeline y devuelve un resumen de métricas.
+    Execute all four pipeline steps and return a summary of key metrics.
+
+    CloudWatch publishing is controlled by the USE_CLOUDWATCH environment
+    variable (set to "true" in .env to enable). It is evaluated at call time
+    so that changes to the environment after import are respected.
 
     Args:
-        hours:      Horas de operación a simular (default: 24h = una guardia
-                    completa). Con 60s de intervalo genera hours × 60 lecturas.
-        fault_prob: Fracción de lecturas que tendrán una falla inyectada
-                    (default: 0.03 = 3%). Útil para evaluar la sensibilidad
-                    del detector: valores más altos generan más eventos.
-        output_dir: Carpeta donde se guarda el CSV de datos crudos.
-                    Se crea automáticamente si no existe.
+        hours:      Hours of engine operation to simulate. At one reading per
+                    minute this produces hours × 60 rows (default: 24).
+        fault_prob: Fraction of readings that will have an injected fault
+                    (default: 0.03 = 3%). Higher values stress-test the
+                    anomaly detector and produce more alert-level events.
+        output_dir: Directory where the raw CSV is saved. Created automatically
+                    if it does not exist (default: "data/raw/").
 
     Returns:
-        Diccionario con las métricas clave del pipeline:
-            filename            — nombre del CSV de datos crudos generado
-            total_readings      — número total de lecturas procesadas
-            faults_injected     — fallas inyectadas en la simulación
-            critical_anomalies  — anomalías críticas detectadas (z-score ≥ 3)
-            avg_health_score    — score promedio del período (0–100)
-            min_health_score    — peor score observado en todo el período
-            status_distribution — distribución completa de estados del motor
-            processed_path      — ruta al CSV procesado con scores
+        A dict with the following keys:
+            filename            — name of the raw CSV file generated
+            total_readings      — total number of rows processed
+            faults_injected     — number of faults injected by the simulator
+            critical_anomalies  — critical anomalies detected (z-score ≥ 3)
+            avg_health_score    — average health score for the period (0–100)
+            min_health_score    — worst health score observed (0–100)
+            status_distribution — full breakdown of readings by status level
+            processed_path      — path to the enriched CSV with scores
     """
+    use_cloudwatch = os.getenv("USE_CLOUDWATCH", "false").lower() == "true"
 
     logger.info("=" * 50)
     logger.info("MARINE ENGINE MONITORING PIPELINE")
     logger.info("=" * 50)
 
-    # ── PASO 1: Simular datos ──────────────────────────────
-    logger.info(f"[1/4] Simulando {hours}h de datos...")
+    # ── STEP 1: Simulate data ──────────────────────────────
+    logger.info(f"[1/4] Simulating {hours}h of engine data...")
 
     sim = MarineEngineSimulator(seed=42)
     df_raw = sim.generate_dataset(
@@ -100,24 +104,25 @@ def run(
     Path(output_dir).mkdir(parents=True, exist_ok=True)
     df_raw.to_csv(output_path, index=False)
 
-    logger.info(f"    Lecturas generadas : {len(df_raw)}")
-    logger.info(f"    Fallas inyectadas  : {df_raw['fault_injected'].sum()}")
-    logger.info(f"    Archivo guardado   : {output_path}")
+    logger.info(f"    Readings generated : {len(df_raw)}")
+    logger.info(f"    Faults injected    : {df_raw['fault_injected'].sum()}")
+    logger.info(f"    File saved         : {output_path}")
 
-    # ── PASO 2: Cargar y preparar ──────────────────────────
-    logger.info("[2/4] Cargando y preparando datos...")
+    # ── STEP 2: Load and prepare ───────────────────────────
+    logger.info("[2/4] Loading and preparing data...")
 
     df = load_engine_data(str(output_path))
     summary = get_summary(df)
 
-    logger.info(f"    Período : {summary['start_time'][:19]} "
+    logger.info(f"    Period   : {summary['start_time'][:19]} "
                 f"→ {summary['end_time'][:19]}")
-    logger.info(f"    Duración: {summary['duration_hours']}h")
+    logger.info(f"    Duration : {summary['duration_hours']}h")
 
-    # ── PASO 3: Detectar anomalías ─────────────────────────
-    logger.info("[3/4] Detectando anomalías...")
+    # ── STEP 3: Detect anomalies ───────────────────────────
+    logger.info("[3/4] Detecting anomalies...")
 
-    # Primeras 6h como línea base (asumidas normales)
+    # Use the first 6 h (up to 360 rows) as the normal baseline.
+    # Falls back to the first 25% of the dataset for shorter simulations.
     baseline_size = min(360, len(df) // 4)
     baseline_df   = df.iloc[:baseline_size]
 
@@ -132,42 +137,49 @@ def run(
     critical_anomalies = [a for a in anomalies if a.severity == "critical"]
     warning_anomalies  = [a for a in anomalies if a.severity == "warning"]
 
-    logger.info(f"    Anomalías críticas    : {len(critical_anomalies)}")
-    logger.info(f"    Advertencias          : {len(warning_anomalies)}")
+    logger.info(f"    Critical anomalies : {len(critical_anomalies)}")
+    logger.info(f"    Warnings           : {len(warning_anomalies)}")
 
-    # ── PASO 4: Health Score ───────────────────────────────
-    logger.info("[4/4] Calculando health scores...")
+    # ── STEP 4: Health score ───────────────────────────────
+    logger.info("[4/4] Computing health scores...")
 
     scorer    = EngineHealthScorer()
     df_final  = scorer.add_health_score(df_analyzed)
     hs_summary = scorer.get_status_summary(df_final)
 
-    logger.info(f"    Score promedio : {hs_summary['avg_score']}")
-    logger.info(f"    Score mínimo   : {hs_summary['min_score']}")
+    # ── CLOUDWATCH (optional) ─────────────────────────────
+    if use_cloudwatch:
+        logger.info("Publishing metrics to CloudWatch...")
+        publisher = CloudWatchPublisher(engine_id="ENGINE-01")
+        publisher.publish_dataframe_summary(df_final)
+        logger.info("Metrics published")
 
-    # ── REPORTE FINAL ──────────────────────────────────────
+    logger.info(f"    Average score : {hs_summary['avg_score']}")
+    logger.info(f"    Minimum score : {hs_summary['min_score']}")
+
+    # ── FINAL REPORT ───────────────────────────────────────
     logger.info("=" * 50)
-    logger.info("RESULTADO FINAL")
+    logger.info("FINAL RESULTS")
     logger.info("=" * 50)
 
     for status in ["OPTIMAL", "GOOD", "CAUTION", "ALERT", "CRITICAL"]:
         data = hs_summary[status]
         if data["count"] > 0:
             logger.info(
-                f"    {status:<10} {data['count']:>5} lecturas "
+                f"    {status:<10} {data['count']:>5} readings "
                 f"({data['percent']:>5.1f}%)"
             )
 
-    # Guardar CSV procesado
+    # Save processed CSV
     processed_dir  = Path("data/processed")
     processed_dir.mkdir(parents=True, exist_ok=True)
     processed_path = processed_dir / f"processed_{filename}"
-    df_final.to_csv(processed_path)
+    df_final.to_csv(processed_path, index=False)
 
-    logger.info(f"\n    CSV procesado: {processed_path}")
+    logger.info(f"\n    Processed CSV: {processed_path}")
     logger.info("=" * 50)
 
-    # ── RETORNAR MÉTRICAS ──────────────────────────────────
+    # ── RETURN METRICS ─────────────────────────────────────
     return {
         "filename":         filename,
         "total_readings":   len(df_final),
@@ -189,13 +201,13 @@ if __name__ == "__main__":
         "--hours",
         type=int,
         default=24,
-        help="Horas de datos a simular (default: 24)"
+        help="Hours of data to simulate (default: 24)"
     )
     parser.add_argument(
         "--fault-prob",
         type=float,
         default=0.03,
-        help="Probabilidad de falla por lectura (default: 0.03)"
+        help="Fault injection probability per reading (default: 0.03)"
     )
     args = parser.parse_args()
 
@@ -204,7 +216,7 @@ if __name__ == "__main__":
         fault_prob=args.fault_prob
     )
 
-    print("\nMétricas del pipeline:")
+    print("\nPipeline metrics:")
     for key, value in results.items():
         if key != "status_distribution":
             print(f"  {key}: {value}")
