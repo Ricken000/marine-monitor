@@ -18,4 +18,4 @@ pip install -r requirements.txt
 *En construcción — Semana 1*
 
 ## Autor
-Ricardo Caviedes — Ingeniero en Marina Mercante / AWS SAA Certified
+Ricardo Caviedes — Merchant Marine Engineer / AWS SAA Certified / Data Analyst
