@@ -26,7 +26,9 @@ import sys
 import os
 
 # Ensure the project root is on the Python path
-sys.path.insert(0, str(Path(__file__).parent.parent))
+ROOT = Path(__file__).parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from src.simulator.engine_simulator import MarineEngineSimulator
 from src.analysis.anomaly_detector import StatisticalAnomalyDetector

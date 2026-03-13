@@ -29,6 +29,17 @@ The project covers the full data lifecycle:
 
 ---
 
+## Live Demo
+
+▶ **[Launch Interactive Dashboard](https://marine-engine-monitor.streamlit.app)**
+
+Configure simulation parameters from the sidebar:
+- **Random Seed** — reproducible results for comparison
+- **Hours** — simulation window (6–72h)
+- **Fault Probability** — control engine degradation level
+
+---
+
 ## Architecture
 
 ```
