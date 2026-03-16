@@ -1,4 +1,5 @@
 boto3
+matplotlib
 numpy
 pandas
 plotly
