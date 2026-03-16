@@ -31,7 +31,7 @@ The project covers the full data lifecycle:
 
 ## Live Demo
 
-▶ **[Launch Interactive Dashboard](https://marine-engine-monitor.streamlit.app)**
+▶ **[Launch Interactive Dashboard](https://marine-monitor-jgbk7vgpy5himz9tawnmcr.streamlit.app)**
 
 Configure simulation parameters from the sidebar:
 - **Random Seed** — reproducible results for comparison
